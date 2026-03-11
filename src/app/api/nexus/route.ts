@@ -1,56 +1,96 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
-// In a full production app, you would connect to the Notion MCP server here via stdio or SSE.
-// import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-// import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const ai = new GoogleGenAI({});
+import { buildSystemPrompt, createNotionPage, type WorkflowMode } from "@/lib/nexus";
+
+type RequestBody = {
+  prompt?: string;
+  title?: string;
+  notionPageId?: string;
+  imageBase64?: string | null;
+  mode?: WorkflowMode;
+};
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { prompt, notionPageId, imageBase64 } = body;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
 
-    if (!prompt) {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+    if (!geminiApiKey) {
+      return NextResponse.json(
+        { error: "GEMINI_API_KEY is not configured." },
+        { status: 500 },
+      );
     }
 
-    // Step 1: Multimodal Gemini Processing
-    const contents: any[] = [{ text: prompt }];
+    const body = (await req.json()) as RequestBody;
+    const {
+      prompt,
+      title,
+      notionPageId,
+      imageBase64,
+      mode = "engineering",
+    } = body;
+
+    if (!prompt?.trim()) {
+      return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
+    }
+
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const contents: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }> = [
+      {
+        text: `${buildSystemPrompt(mode)}\n\nUser request: ${prompt.trim()}`,
+      },
+    ];
 
     if (imageBase64) {
-      // Strip off the data:image/jpeg;base64, part
-      const base64Data = imageBase64.split(",")[1];
-      const mimeType = imageBase64.split(",")[0].split(":")[1].split(";")[0];
-      contents.push({
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType,
-        },
-      });
+      const [meta, data] = imageBase64.split(",");
+
+      if (meta && data) {
+        const mimeType = meta.split(":")[1]?.split(";")[0] ?? "image/png";
+        contents.push({
+          inlineData: {
+            data,
+            mimeType,
+          },
+        });
+      }
     }
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: contents,
+      contents,
     });
 
-    const aiText = response.text;
+    const generatedContent = response.text?.trim();
 
-    // Step 2: Notion MCP Agent Simulation
-    // Normally, the MCP Client would call the tool server-side here.
-    // e.g., await mcpClient.callTool("notion_mcp", "append_content", { page_id: notionPageId, markdown: aiText })
-    
-    // For this boilerplate, we'll return the AI text so the UI can preview it.
-    
-    return NextResponse.json({ 
-      success: true, 
-      generatedContent: aiText,
-      mockMCPStatus: `Simulated MCP call to append content to Notion Page ID: ${notionPageId || 'N/A'}`,
+    if (!generatedContent) {
+      return NextResponse.json(
+        { error: "Gemini returned an empty response." },
+        { status: 502 },
+      );
+    }
+
+    const publishResult = notionPageId
+      ? await createNotionPage({
+          markdown: generatedContent,
+          parentPageId: notionPageId,
+          title: title?.trim() || `NexusForge ${mode} brief`,
+        })
+      : { published: false, reason: "No Notion parent page ID provided." };
+
+    return NextResponse.json({
+      success: true,
+      generatedContent,
+      published: publishResult.published,
+      publishReason: publishResult.published ? null : publishResult.reason,
+      notionPageUrl: publishResult.published ? publishResult.url : null,
+      notionPageCreatedId: publishResult.published ? publishResult.id : null,
+      mcpNote:
+        "This workspace ships with .vscode/mcp.json for direct Notion MCP OAuth inside VS Code. The web app publishes through the Notion API for a user-triggered runtime path.",
     });
-
   } catch (error) {
-    console.error("Nexus API Error:", error);
-    return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to process request.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

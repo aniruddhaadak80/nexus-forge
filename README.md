@@ -1,72 +1,108 @@
 <div align="center">
-  <img src="https://media2.dev.to/dynamic/image/width=1300/https://dev-to-uploads.s3.amazonaws.com/uploads/articles/4qa4kduo001bwy9lwn4w.png" alt="Notion MCP Challenge" width="600"/>
-  <h1>🌌 NexusForge: The Multimodal Notion Workhub</h1>
-  <p>An intelligent agent bridging Gemini's Multimodal magic with Notion using Model Context Protocol (MCP).</p>
+  <img src="./public/nexusforge-mark.svg" alt="NexusForge logo" width="120" />
+  <h1>NexusForge</h1>
+  <p>Turn rough visuals into polished Notion deliverables.</p>
+  <p>
+    <img src="https://img.shields.io/badge/Next.js-16-0B1220?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" />
+    <img src="https://img.shields.io/badge/Gemini-3_Flash_Preview-0B1220?style=for-the-badge&logo=google-gemini&logoColor=8DEBFF" alt="Gemini" />
+    <img src="https://img.shields.io/badge/Notion-MCP_%2B_API-0B1220?style=for-the-badge&logo=notion&logoColor=white" alt="Notion" />
+    <img src="https://img.shields.io/badge/Vercel-Ready-0B1220?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel" />
+  </p>
 </div>
 
----
+## Overview
+NexusForge is a challenge-focused multimodal workflow app for Notion. It takes a screenshot, whiteboard photo, product sketch, or architecture diagram plus a text prompt, uses Gemini 3 Flash Preview to generate structured markdown, and then publishes that result into Notion as a child page when a target page ID and Notion token are configured.
 
-## 🛠️ The Vision
-NexusForge turns your static Notion databases into dynamic, intelligent agents. By leveraging the **Notion MCP**, NexusForge safely tunnels into your Notion workspace, while **Gemini-3-Flash-Preview** brings lightning-fast, multimodal AI reasoning.
+The project also includes workspace-level Notion MCP configuration in [.vscode/mcp.json](./.vscode/mcp.json) so the repo itself is ready for direct Notion MCP OAuth inside VS Code.
 
-Imagine dropping an architecture diagram (image), a PDF spec, or a whiteboard sketch into NexusForge, and having it autonomously generate tickets, append summaries, or draft code right back into your Notion workspace.
+## Why This Is Different
+- It is built around a concrete workflow, not a generic chat wrapper.
+- It demonstrates multimodal input with a real generated artifact.
+- It uses an honest split between Notion MCP for workspace tooling and the Notion API for user-triggered web publishing.
+- It is screenshot-ready for challenge submission and portfolio use.
 
-### 🔥 Features
-- 🧠 **Multimodal Processing:** Native support for Gemini-3-Flash-Preview. Pass images, docs, and text.
-- ⚡ **Notion MCP Integration:** Uses robust contextual tools (not brittle APIs) scaling securely with Model Context Protocol.
-- ✨ **Automated Workflow Orchestration:** Extracts backlog > Processes via AI > Injects drafts into Notion pages. 
+## Screenshots
+### Landing state
+![NexusForge home](./docs/screenshots/nexusforge-home.png)
 
----
+### Generated technical brief from an uploaded system diagram
+![NexusForge generated result](./docs/screenshots/nexusforge-generated.png)
 
-## 🏗️ Architecture Flowchart
+## Core Flow
 ```mermaid
 graph TD
-    A[User UI Dashboard] -->|1. Upload Image/Prompt| B(NexusForge Next.js Backend)
-    B -->|2. Multimodal Payload| C{Gemini 3.1 Flash Preview}
-    C -->|3. Structured Markdown| B
-    B -->|4. Tool Call via MCP Client| D[Notion MCP Server]
-    D -->|5. Securely Append Content| E[(Notion Workspace)]
-    E -->|6. Sync Success| A
+    A[User uploads diagram or screenshot] --> B[Next.js web app]
+    B --> C[Gemini 3 Flash Preview]
+    C --> D[Notion-ready markdown artifact]
+    D --> E{Parent page ID provided?}
+    E -- No --> F[Preview in execution console]
+    E -- Yes --> G[Create child page via Notion API]
+    H[.vscode/mcp.json] --> I[Direct Notion MCP connection in VS Code]
 ```
 
----
+## What It Can Generate
+- Engineering briefs from architecture diagrams
+- Incident summaries from dashboards or alert screenshots
+- Campaign plans from moodboards and rough launch notes
+- Study guides from notes and visual learning material
 
-## 💻 Tech Stack
-- **Framework:** `Next.js 15 (App Router)`
-- **Styling:** `Tailwind CSS`, `Framer Motion`
-- **AI Brain:** `Google GenAI SDK (gemini-3-flash-preview)`
-- **Integration:** `@modelcontextprotocol/sdk` (Notion MCP)
-- **Deployment:** `Vercel`
+## Stack
+- Next.js 16 App Router
+- Tailwind CSS 4
+- Framer Motion
+- Google GenAI SDK
+- Notion API
+- Notion MCP workspace config
 
----
+## Local Setup
+1. Copy [.env.example](./.env.example) to `.env.local`
+2. Set `GEMINI_API_KEY`
+3. Optionally set `NOTION_API_KEY` if you want live publishing to Notion
+4. Run `npm install`
+5. Run `npm run dev`
 
-## 🚀 Getting Started
-
-### Prerequisites
-1. Get a Gemini API Key: [Google AI Studio](https://aistudio.google.com/)
-2. Set up Notion Integrations Token.
-3. Install standard MCP infrastructure.
+Example `.env.local`:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/nexus-forge.git
-cd nexus-forge
-
-# Install Dependencies
-npm install
-
-# Set Environment Variables
-echo "GEMINI_API_KEY=your_key_here" > .env.local
-
-# Run the Dev Server
-npm run dev
+GEMINI_API_KEY=your_gemini_key
+NOTION_API_KEY=your_notion_integration_token
 ```
 
----
+## Notion Setup
+1. Create a Notion integration and grant it insert content access.
+2. Share the parent Notion page with that integration.
+3. Paste the parent page ID into the app.
+4. Generate the artifact and publish.
 
-### Challenge Submission Notes
-This app was built specifically for the [Notion MCP DEV.to Challenge](https://dev.to/challenges/notion-2026-03-04). 
-**Originality:** Directly implements multimodal pipelines with Notion.
-**Complexity:** Merges latest Next.js with GenAI SDK and MCP protocol pipelines.
+## MCP Setup In VS Code
+This repo already includes [.vscode/mcp.json](./.vscode/mcp.json):
 
-<p align="center">Made with ❤️ for the Notion & DEV community.</p>
+```json
+{
+  "servers": {
+    "notion": {
+      "type": "http",
+      "url": "https://mcp.notion.com/mcp"
+    }
+  }
+}
+```
+
+Use `MCP: List Servers` in VS Code and complete the OAuth flow for Notion.
+
+## Demo Asset
+The repo includes a reusable sample system diagram at [public/demo-system-map.png](./public/demo-system-map.png) so the multimodal flow can be demonstrated consistently.
+
+## Challenge Fit
+- Originality: a concrete “diagram to spec” workflow instead of generic AI notes.
+- Technical complexity: multimodal Gemini processing, Notion publishing, and MCP workspace integration.
+- Practicality: useful for engineering, operations, marketing, and learning workflows.
+
+## Scripts
+- `npm run dev`
+- `npm run build`
+- `npm run lint`
+- `npm run start`
+
+## License
+MIT

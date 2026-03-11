@@ -7,65 +7,105 @@ tags: devchallenge, notionchallenge, mcp, ai, nextjs
 *This is a submission for the [Notion MCP Challenge](https://dev.to/challenges/notion-2026-03-04)*
 
 ## What I Built
-**NexusForge** is a fully automated, multimodal agent hub that supercharges your Notion workflow. Designed as a standalone web application, it bridges the bleeding-edge **Gemini 3.1 Flash Preview** multimodal capabilities with the secure structure of the **Notion MCP (Model Context Protocol)**. 
+**NexusForge** is a multimodal workflow app for Notion. It turns screenshots, whiteboard photos, rough sketches, and messy prompts into structured Notion-ready deliverables.
 
-### The Problem It Solves:
-Standard text integrations are limiting. What if you sketch out an architecture diagram on a napkin, take a photo, and need to create structured Notion technical documentation from it? Or what if you upload an invoice image and want it automatically categorized in your Notion Finance database?
+The strongest workflow in the app is **diagram to technical brief**: upload a system design image, ask for a concise engineering summary, and NexusForge produces a clean markdown artifact that can be previewed immediately and published into Notion as a child page.
 
-NexusForge allows you to upload **images, documents, and prompts**. Then, the agent analyzes these multimodal inputs using Gemini 3.1, breaks them down into structured Markdown and Mermaid.js flowcharts, and utilizes the **Notion MCP** to autonomously find the right pages and append these rich outputs globally.
+I built it to solve a very practical problem: visual thinking happens early, but documentation usually happens later and manually. NexusForge closes that gap.
+
+It combines:
+- **Gemini 3 Flash Preview** for multimodal understanding
+- **Notion API** for creating real pages from generated markdown
+- **Notion MCP configuration** in the workspace so the repo is ready for direct Notion MCP OAuth in VS Code
 
 ## Video Demo
 *(Placeholder for Video URL showing image upload and Notion auto-population)*
+
+## Screenshots
+### Landing page
+![NexusForge home](./screenshots/nexusforge-home.png)
+
+### Generated result from an uploaded system map
+![NexusForge generated result](./screenshots/nexusforge-generated.png)
 
 ## Structure Flowchart
 Let's see how the internal pipeline operates using this diagram:
 
 ```mermaid
 graph TD
-    A[UI / Frontend Upload] -->|Image/Prompt Payload| B[Next.js Server API]
-    B -->|Multimodal Request| C{Gemini 3.1 Flash Preview}
-    C -->|Generates Markdown/Structured Data| B
-    B -->|Invokes Tool via MCP SDK| D((Notion MCP Server))
-    D -->|Write/Update| E[Notion User Workspace]
-    E -->|Success Response| A
+    A[Upload screenshot or diagram] --> B[Next.js app]
+    B --> C{Gemini 3 Flash Preview}
+    C --> D[Generated Notion-ready markdown]
+    D --> E{Parent page ID present?}
+    E -- No --> F[Preview in app]
+    E -- Yes --> G[Create child page in Notion]
+    H[VS Code MCP config] --> I[Direct Notion MCP OAuth in workspace]
 ```
 
 ## Setup & Implementation Guide
 ### 1. The Multimodal Intelligence
-I utilized `@google/genai` to take advantage of the newly released Gemini 3.1 flash preview model. This allows NexusForge to bypass basic LLM chatbots and act specifically on spatial/visual data natively:
+I used `@google/genai` with `gemini-3-flash-preview` so NexusForge can reason about both text and images in one request. That makes screenshots and architecture diagrams first-class input instead of just attachments.
 
 ```typescript
-// Core payload builder handling multimodal UI inputs
-const contents = [{ text: prompt }];
+const contents = [
+  {
+    text: `${buildSystemPrompt(mode)}\n\nUser request: ${prompt.trim()}`,
+  },
+];
 
 if (imageBase64) {
-  // Strip mime headers & append as inlineData to natively support Gemini Multimodal
-  const base64Data = imageBase64.split(",")[1];
-  const mimeType = imageBase64.split(",")[0].split(":")[1].split(";")[0];
+  const [meta, data] = imageBase64.split(",");
+  const mimeType = meta.split(":")[1]?.split(";")[0] ?? "image/png";
   contents.push({
-    inlineData: { data: base64Data, mimeType: mimeType },
+    inlineData: { data, mimeType },
   });
 }
 
 const response = await ai.models.generateContent({
   model: "gemini-3-flash-preview",
-  contents: contents,
+  contents,
 });
 ```
 
-### 2. The Model Context Protocol (MCP) Bridge
-Rather than creating brittle HTTP API calls mapping to every Notion endpoint, the backend adopts the **MCP Client Protocol**. This meant the agent doesn't need to be hard-coded with business logic—it explores the Notion MCP tools dynamically to fetch search capabilities or append blocks:
+### 2. The Notion Publishing Path
+For the web app runtime, I use the Notion API to create a real child page under a selected parent page. This keeps the publishing path deterministic and easy to demo:
 
 ```typescript
-// MCP Tool Calling concept for injecting back to Notion
-await mcpClient.callTool("notion_mcp", "append_content", { 
-   page_id: targetNotionPageId, 
-   markdown: aiGeneratedInsight 
+const response = await fetch("https://api.notion.com/v1/pages", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${notionApiKey}`,
+    "Content-Type": "application/json",
+    "Notion-Version": "2026-03-11",
+  },
+  body: JSON.stringify({
+    parent: { page_id: cleanParentId },
+    properties: {
+      title: {
+        title: [{ text: { content: title } }],
+      },
+    },
+    markdown,
+  }),
 });
 ```
 
+### 3. Where MCP Fits
+The repo also includes `.vscode/mcp.json` pointing at `https://mcp.notion.com/mcp`, so the workspace itself is ready for direct Notion MCP authentication inside GitHub Copilot or other MCP-capable tools in VS Code.
+
+That means the project demonstrates two complementary ideas:
+- **Web app publishing flow** for end users
+- **Workspace MCP integration** for AI-assisted Notion operations while developing
+
+## Why This Stands Out In The Challenge
+- It is not just “chat with Notion”. It is a concrete production-style workflow.
+- It shows off **multimodality** in a way judges can understand immediately.
+- It uses Notion in a way that feels native: generating polished artifacts and pushing them directly into a workspace.
+- It is practical across engineering, operations, marketing, and study workflows.
+
 ## Future Scope
-- Adding continuous polling: Auto-detecting when a Notion status changes to "Needs Review" and sending an automatic Gemini-3 agent payload.
-- Expanding file type parsing to `.pdf` and `.docx` blobs.
+- Add PDF and document ingestion for richer multimodal pipelines.
+- Add template-aware publishing into specific Notion databases.
+- Add polling and human-in-the-loop approval flows for recurring workflows.
 
 Thank you to Notion and DEV! NexusForge aims to redefine exactly how interactive and automated workspaces should feel!
