@@ -39,6 +39,12 @@ The project also includes workspace-level Notion MCP configuration in [.vscode/m
 ### Generated technical brief from an uploaded system diagram
 ![NexusForge generated result](./docs/screenshots/nexusforge-generated.png)
 
+### Hardened Page Picker and Recent Pages
+![NexusForge hardened page picker](./docs/screenshots/nexusforge-recent-pages.png)
+
+### Runtime Health and Error Handling
+![NexusForge health panel](./docs/screenshots/nexusforge-picker-health-detail.png)
+
 ## Core Flow
 ```mermaid
 graph TD

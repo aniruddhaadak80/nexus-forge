@@ -36,6 +36,12 @@ To make the app safer for broader public use, I added:
 ### Generated result from an uploaded system map
 ![NexusForge generated result](./screenshots/nexusforge-generated.png)
 
+### Hardened Page Picker and Recent Pages
+![NexusForge hardened page picker](./screenshots/nexusforge-recent-pages.png)
+
+### Runtime Health and Error Handling
+![NexusForge health panel](./screenshots/nexusforge-picker-health-detail.png)
+
 ## Structure Flowchart
 Let's see how the internal pipeline operates using this diagram:
 
