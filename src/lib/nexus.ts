@@ -1,6 +1,14 @@
 const NOTION_API_VERSION = "2026-03-11";
 
+import { TimeoutError, withRetry } from "@/lib/network";
+
 export type WorkflowMode = "engineering" | "incident" | "campaign" | "study";
+
+type NotionErrorPayload = {
+  code?: string;
+  message?: string;
+  object?: string;
+};
 
 type PublishArgs = {
   markdown: string;
@@ -11,6 +19,88 @@ type PublishArgs = {
 
 export function sanitizeNotionId(value: string) {
   return value.trim().replace(/[^a-fA-F0-9-]/g, "");
+}
+
+export function getTokenLabel(hasConnectedSession: boolean, hasFallbackToken: boolean) {
+  if (hasConnectedSession) {
+    return "Connected Notion workspace";
+  }
+
+  if (hasFallbackToken) {
+    return "Configured workspace token";
+  }
+
+  return "Unavailable";
+}
+
+export function readPageTitle(properties?: Record<string, unknown>) {
+  if (!properties) {
+    return "Untitled page";
+  }
+
+  for (const value of Object.values(properties)) {
+    const property = value as {
+      type?: string;
+      title?: Array<{ plain_text?: string }>;
+    };
+
+    if (property.type === "title" && property.title?.length) {
+      return property.title.map((item) => item.plain_text ?? "").join("").trim() || "Untitled page";
+    }
+  }
+
+  return "Untitled page";
+}
+
+export function getReadableNotionError(error: unknown, fallbackMessage: string) {
+  if (error instanceof TimeoutError) {
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallbackMessage;
+}
+
+export async function fetchNotionJson<T>(url: string, init: RequestInit) {
+  return withRetry(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          ...(init.headers ?? {}),
+          "Notion-Version": NOTION_API_VERSION,
+        },
+      });
+
+      const payload = (await response.json()) as T & NotionErrorPayload;
+
+      if (!response.ok) {
+        throw new Error(
+          payload.message
+            ? `Notion error (${payload.code ?? response.status}): ${payload.message}`
+            : `Notion request failed with status ${response.status}.`,
+        );
+      }
+
+      return payload;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }, {
+    retries: 2,
+    retryDelayMs: 900,
+    shouldRetry: (error) => {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      return message.includes("timeout") || message.includes("429") || message.includes("5");
+    },
+  });
 }
 
 export function buildSystemPrompt(mode: WorkflowMode) {
@@ -55,48 +145,45 @@ export async function createNotionPage({ markdown, parentPageId, title, notionAp
     };
   }
 
-  const response = await fetch("https://api.notion.com/v1/pages", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resolvedNotionApiKey}`,
-      "Content-Type": "application/json",
-      "Notion-Version": NOTION_API_VERSION,
-    },
-    body: JSON.stringify({
-      parent: {
-        page_id: cleanParentId,
+  try {
+    const payload = await fetchNotionJson<{ id: string; url: string }>("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resolvedNotionApiKey}`,
+        "Content-Type": "application/json",
       },
-      properties: {
-        title: {
-          title: [
-            {
-              text: {
-                content: title,
-              },
-            },
-          ],
+      body: JSON.stringify({
+        parent: {
+          page_id: cleanParentId,
         },
-      },
-      icon: {
-        type: "emoji",
-        emoji: "\u2692\ufe0f",
-      },
-      markdown,
-    }),
-  });
+        properties: {
+          title: {
+            title: [
+              {
+                text: {
+                  content: title,
+                },
+              },
+            ],
+          },
+        },
+        icon: {
+          type: "emoji",
+          emoji: "\u2692\ufe0f",
+        },
+        markdown,
+      }),
+    });
 
-  const payload = await response.json();
-
-  if (!response.ok) {
+    return {
+      published: true,
+      id: payload.id,
+      url: payload.url,
+    };
+  } catch (error) {
     return {
       published: false,
-      reason: payload.message ?? "Notion rejected the request.",
+      reason: getReadableNotionError(error, "Notion rejected the request."),
     };
   }
-
-  return {
-    published: true,
-    id: payload.id as string,
-    url: payload.url as string,
-  };
 }

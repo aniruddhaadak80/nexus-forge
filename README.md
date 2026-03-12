@@ -25,6 +25,13 @@ The project also includes workspace-level Notion MCP configuration in [.vscode/m
 - It uses an honest split between Notion MCP for workspace tooling and the Notion API for user-triggered web publishing.
 - It is screenshot-ready for challenge submission and portfolio use.
 
+## Public-Use Hardening
+- Search and select destination Notion pages from inside the app instead of relying only on raw page IDs.
+- Validate uploads before submit and reject unsupported image types early.
+- Show clearer publish errors from Notion when a page cannot be created.
+- Retry and timeout external Gemini and Notion requests to reduce transient failures.
+- Display runtime health for Gemini, Notion auth, and OAuth readiness in the UI.
+
 ## Screenshots
 ### Live app with Notion OAuth connect flow
 ![NexusForge OAuth home](./docs/screenshots/nexusforge-oauth-home.png)
@@ -116,6 +123,12 @@ The repo includes a reusable sample system diagram at [public/demo-system-map.pn
 - Originality: a concrete “diagram to spec” workflow instead of generic AI notes.
 - Technical complexity: multimodal Gemini processing, Notion OAuth, Notion publishing, and MCP workspace integration.
 - Practicality: useful for engineering, operations, marketing, and learning workflows.
+
+## Reliability Notes
+- Best-supported upload formats: PNG, JPEG, WebP
+- Recommended image size: under 10MB
+- Publishing requires either a connected Notion workspace or a configured fallback token
+- A destination page must still exist and be accessible in the authorized workspace
 
 ## Scripts
 - `npm run dev`

@@ -18,6 +18,14 @@ It combines:
 - **Notion OAuth + Notion API** for connecting a user workspace and creating real pages from generated markdown
 - **Notion MCP configuration** in the workspace so the repo is ready for direct Notion MCP OAuth in VS Code
 
+## Reliability Hardening
+To make the app safer for broader public use, I added:
+- a **Notion page picker** backed by live workspace search
+- **client-side upload validation** for unsupported image types and oversized files
+- **clearer Notion publish errors** instead of generic failures
+- **retry and timeout handling** for both Gemini and Notion requests
+- a small **runtime health panel** so users can see whether Gemini, OAuth, and Notion publish paths are actually ready
+
 ## Video Demo
 *(Placeholder for Video URL showing image upload and Notion auto-population)*
 
@@ -110,6 +118,7 @@ That means the project demonstrates two complementary ideas:
 - It includes a real in-product **Connect Notion** OAuth handoff instead of relying only on hidden developer credentials.
 - It uses Notion in a way that feels native: generating polished artifacts and pushing them directly into a workspace.
 - It is practical across engineering, operations, marketing, and study workflows.
+- It has been hardened beyond a demo by reducing common user failure modes in the publish flow.
 
 ## Future Scope
 - Add PDF and document ingestion for richer multimodal pipelines.

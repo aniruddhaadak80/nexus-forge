@@ -6,16 +6,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   BrainCircuit,
+  CheckCircle2,
   Database,
   DoorOpen,
+  FileSearch,
   FileImage,
   FileText,
   Flame,
+  HeartPulse,
   Link2,
   Loader2,
   Orbit,
+  Search,
   Send,
   Sparkles,
+  TriangleAlert,
   UploadCloud,
 } from "lucide-react";
 
@@ -40,6 +45,25 @@ type NotionSessionState = {
   workspaceIcon?: string | null;
   ownerName?: string | null;
 };
+
+type NotionPageOption = {
+  id: string;
+  title: string;
+  url: string;
+  parentType: string | null;
+};
+
+type HealthState = {
+  geminiConfigured: boolean;
+  notionConnected: boolean;
+  notionWorkspaceName: string | null;
+  notionFallbackConfigured: boolean;
+  notionPublishMethod: string;
+  oauthConfigured: boolean;
+};
+
+const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 
 const workflowOptions: Array<{
   value: WorkflowMode;
@@ -74,10 +98,18 @@ export default function Home() {
   const [title, setTitle] = useState("System Design Review");
   const [mode, setMode] = useState<WorkflowMode>("engineering");
   const [image, setImage] = useState<string | null>(null);
+  const [imageLabel, setImageLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ApiResult | null>(null);
   const [notionSession, setNotionSession] = useState<NotionSessionState>({ connected: false });
   const [notionBanner, setNotionBanner] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pageSearch, setPageSearch] = useState("");
+  const [pageOptions, setPageOptions] = useState<NotionPageOption[]>([]);
+  const [searchingPages, setSearchingPages] = useState(false);
+  const [pageSearchError, setPageSearchError] = useState<string | null>(null);
+  const [selectedPageTitle, setSelectedPageTitle] = useState<string | null>(null);
+  const [health, setHealth] = useState<HealthState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -99,11 +131,32 @@ export default function Home() {
       .then((sessionResponse) => sessionResponse.json())
       .then((data: NotionSessionState) => setNotionSession(data))
       .catch(() => setNotionSession({ connected: false }));
+
+    void fetch("/api/health")
+      .then((healthResponse) => healthResponse.json())
+      .then((data: HealthState) => setHealth(data))
+      .catch(() => setHealth(null));
   }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
+        setUploadError("Unsupported file type. Use PNG, JPEG, or WebP.");
+        setImage(null);
+        setImageLabel(null);
+        return;
+      }
+
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        setUploadError("Image is too large. Use an image smaller than 10MB.");
+        setImage(null);
+        setImageLabel(null);
+        return;
+      }
+
+      setUploadError(null);
+      setImageLabel(`${file.name} • ${(file.size / 1024 / 1024).toFixed(1)}MB`);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImage(reader.result as string);
@@ -115,6 +168,11 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt) return;
+
+    if (uploadError) {
+      setResult({ error: uploadError });
+      return;
+    }
 
     setLoading(true);
     setResult(null);
@@ -145,7 +203,70 @@ export default function Home() {
     await fetch("/api/notion/disconnect", { method: "POST" });
     setNotionSession({ connected: false });
     setNotionBanner("Notion disconnected.");
+    setPageOptions([]);
+    setSelectedPageTitle(null);
+    setHealth((currentHealth) => currentHealth ? {
+      ...currentHealth,
+      notionConnected: false,
+      notionWorkspaceName: null,
+      notionPublishMethod: currentHealth.notionFallbackConfigured ? "Configured workspace token" : "Unavailable",
+    } : currentHealth);
   };
+
+  const handleSearchPages = async () => {
+    setSearchingPages(true);
+    setPageSearchError(null);
+
+    try {
+      const response = await fetch(`/api/notion/search?query=${encodeURIComponent(pageSearch)}`);
+      const data = await response.json() as { pages?: NotionPageOption[]; error?: string };
+
+      if (!response.ok) {
+        setPageOptions([]);
+        setPageSearchError(data.error ?? "Failed to search Notion pages.");
+        return;
+      }
+
+      setPageOptions(data.pages ?? []);
+
+      if (!data.pages?.length) {
+        setPageSearchError("No matching Notion pages found.");
+      }
+    } catch {
+      setPageSearchError("Failed to search Notion pages.");
+      setPageOptions([]);
+    } finally {
+      setSearchingPages(false);
+    }
+  };
+
+  const handleSelectPage = (page: NotionPageOption) => {
+    setNotionPageId(page.id);
+    setSelectedPageTitle(page.title);
+    setPageSearchError(null);
+  };
+
+  const healthItems = health ? [
+    {
+      label: "Gemini",
+      ok: health.geminiConfigured,
+      detail: health.geminiConfigured ? "Configured" : "Missing API key",
+    },
+    {
+      label: "Notion connection",
+      ok: health.notionConnected || health.notionFallbackConfigured,
+      detail: health.notionConnected
+        ? `Connected to ${health.notionWorkspaceName ?? "workspace"}`
+        : health.notionFallbackConfigured
+          ? "Fallback token configured"
+          : "No token available",
+    },
+    {
+      label: "OAuth",
+      ok: health.oauthConfigured,
+      detail: health.oauthConfigured ? "Configured" : "OAuth env incomplete",
+    },
+  ] : [];
 
   return (
     <div className="grain min-h-screen overflow-x-hidden">
@@ -240,6 +361,27 @@ export default function Home() {
                 )}
               </div>
             </div>
+            <div className="panel rounded-3xl p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[#f5efe6]">
+                <HeartPulse className="h-4 w-4 text-[#7ce7ff]" />
+                Runtime health
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                {healthItems.map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-[#f5efe6]">
+                      {item.ok ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      ) : (
+                        <TriangleAlert className="h-4 w-4 text-amber-400" />
+                      )}
+                      {item.label}
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-[#9db1c4]">{item.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="panel rounded-[28px] p-6 shadow-2xl shadow-black/30">
@@ -278,18 +420,85 @@ export default function Home() {
                   placeholder="Architecture review: checkout service"
                 />
               </div>
-            <div className="space-y-2">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9eb4c8]">
+                  Search Notion pages
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search for a destination page"
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none transition focus:border-[#7ce7ff66]"
+                    value={pageSearch}
+                    onChange={(e) => setPageSearch(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSearchPages}
+                    disabled={searchingPages || (!pageSearch.trim() && !notionSession.connected && !health?.notionFallbackConfigured)}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-[#f5efe6] transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {searchingPages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    Search
+                  </button>
+                </div>
+                {selectedPageTitle && notionPageId && (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                    Selected page: {selectedPageTitle}
+                  </div>
+                )}
+                {pageSearchError && (
+                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                    {pageSearchError}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {pageOptions.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9eb4c8]">
+                  Pick a destination page
+                </label>
+                <div className="grid gap-2">
+                  {pageOptions.map((page) => (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onClick={() => handleSelectPage(page)}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                        notionPageId === page.id
+                          ? "border-[#7ce7ff66] bg-[#7ce7ff12]"
+                          : "border-white/10 bg-black/20 hover:border-white/20"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 text-sm font-medium text-[#f5efe6]">
+                        <FileSearch className="h-4 w-4 text-[#7ce7ff]" />
+                        {page.title}
+                      </div>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#8ea3b8]">
+                        {page.parentType ?? "page"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 space-y-2">
               <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9eb4c8]">
-                Parent Notion page ID
+                Parent Notion page ID fallback
               </label>
               <input
                 type="text"
-                placeholder="Optional, required only to publish"
+                placeholder="Paste manually only if search is not enough"
                 className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none transition focus:border-[#7ce7ff66]"
                 value={notionPageId}
-                onChange={(e) => setNotionPageId(e.target.value)}
+                onChange={(e) => {
+                  setNotionPageId(e.target.value);
+                  setSelectedPageTitle(null);
+                }}
               />
-            </div>
             </div>
 
             <div className="mt-4 space-y-2">
@@ -319,6 +528,11 @@ export default function Home() {
                       <p className="mt-2 text-sm leading-6 text-[#9db1c4]">
                         Gemini will inspect this image alongside your prompt and produce a structured Notion-ready artifact.
                       </p>
+                      {imageLabel && (
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#8ea3b8]">
+                          {imageLabel}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -329,6 +543,11 @@ export default function Home() {
                   </div>
                 )}
               </div>
+              {uploadError && (
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {uploadError}
+                </div>
+              )}
             </div>
 
             <div className="mt-4 space-y-2">
@@ -355,8 +574,8 @@ export default function Home() {
               </button>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-[#9db1c4]">
                 {notionSession.connected
-                  ? "Notion is connected. Add a parent page ID to publish directly into your workspace."
-                  : "Add a Notion page ID to publish automatically. Leave it blank to use NexusForge as a multimodal drafting console."}
+                  ? "Notion is connected. Search for a page or paste a fallback page ID to publish into your workspace."
+                  : "Connect Notion or configure a fallback token, then search for a destination page or paste a page ID manually."}
               </div>
             </div>
           </form>
