@@ -15,7 +15,7 @@ I built it to solve a very practical problem: visual thinking happens early, but
 
 It combines:
 - **Gemini 3 Flash Preview** for multimodal understanding
-- **Notion API** for creating real pages from generated markdown
+- **Notion OAuth + Notion API** for connecting a user workspace and creating real pages from generated markdown
 - **Notion MCP configuration** in the workspace so the repo is ready for direct Notion MCP OAuth in VS Code
 
 ## Video Demo
@@ -36,10 +36,12 @@ graph TD
     A[Upload screenshot or diagram] --> B[Next.js app]
     B --> C{Gemini 3 Flash Preview}
     C --> D[Generated Notion-ready markdown]
-    D --> E{Parent page ID present?}
-    E -- No --> F[Preview in app]
-    E -- Yes --> G[Create child page in Notion]
-    H[VS Code MCP config] --> I[Direct Notion MCP OAuth in workspace]
+  D --> E{Notion connected?}
+  E -- No --> F[Preview in app]
+  E -- Yes --> G{Parent page ID present?}
+  G -- No --> H[Preview in app]
+  G -- Yes --> I[Create child page in Notion]
+  J[VS Code MCP config] --> K[Direct Notion MCP OAuth in workspace]
 ```
 
 ## Setup & Implementation Guide
@@ -68,7 +70,9 @@ const response = await ai.models.generateContent({
 ```
 
 ### 2. The Notion Publishing Path
-For the web app runtime, I use the Notion API to create a real child page under a selected parent page. This keeps the publishing path deterministic and easy to demo:
+For the web app runtime, I now support a proper Notion OAuth connect flow. Users can connect their own workspace from the UI, which stores an encrypted session cookie and lets the server publish to Notion using that workspace token. I also kept `NOTION_API_KEY` as a fallback for internal demos.
+
+Once connected, the app uses the Notion API to create a real child page under a selected parent page:
 
 ```typescript
 const response = await fetch("https://api.notion.com/v1/pages", {
@@ -90,7 +94,10 @@ const response = await fetch("https://api.notion.com/v1/pages", {
 });
 ```
 
-### 3. Where MCP Fits
+### 3. OAuth Callback + Session Handling
+The app includes a callback route at `/api/notion/callback` that exchanges the authorization code for an access token, encrypts the token server-side, and stores it in an HTTP-only cookie. That makes the demo feel like a real connected product rather than a one-off internal script.
+
+### 4. Where MCP Fits
 The repo also includes `.vscode/mcp.json` pointing at `https://mcp.notion.com/mcp`, so the workspace itself is ready for direct Notion MCP authentication inside GitHub Copilot or other MCP-capable tools in VS Code.
 
 That means the project demonstrates two complementary ideas:

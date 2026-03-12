@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 
 import { buildSystemPrompt, createNotionPage, type WorkflowMode } from "@/lib/nexus";
+import { getNotionSessionFromCookies } from "@/lib/notion-oauth";
 
 type RequestBody = {
   prompt?: string;
@@ -70,11 +71,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const notionSession = await getNotionSessionFromCookies();
     const publishResult = notionPageId
       ? await createNotionPage({
           markdown: generatedContent,
           parentPageId: notionPageId,
           title: title?.trim() || `NexusForge ${mode} brief`,
+          notionApiKey: notionSession?.accessToken ?? null,
         })
       : { published: false, reason: "No Notion parent page ID provided." };
 
@@ -85,6 +88,8 @@ export async function POST(req: NextRequest) {
       publishReason: publishResult.published ? null : publishResult.reason,
       notionPageUrl: publishResult.published ? publishResult.url : null,
       notionPageCreatedId: publishResult.published ? publishResult.id : null,
+      notionConnected: Boolean(notionSession),
+      notionWorkspaceName: notionSession?.workspaceName ?? null,
       mcpNote:
         "This workspace ships with .vscode/mcp.json for direct Notion MCP OAuth inside VS Code. The web app publishes through the Notion API for a user-triggered runtime path.",
     });

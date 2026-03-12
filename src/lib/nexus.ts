@@ -6,6 +6,7 @@ type PublishArgs = {
   markdown: string;
   parentPageId: string;
   title: string;
+  notionApiKey?: string | null;
 };
 
 export function sanitizeNotionId(value: string) {
@@ -35,13 +36,13 @@ export function buildSystemPrompt(mode: WorkflowMode) {
   ].join(" ");
 }
 
-export async function createNotionPage({ markdown, parentPageId, title }: PublishArgs) {
-  const notionApiKey = process.env.NOTION_API_KEY;
+export async function createNotionPage({ markdown, parentPageId, title, notionApiKey }: PublishArgs) {
+  const resolvedNotionApiKey = notionApiKey ?? process.env.NOTION_API_KEY;
 
-  if (!notionApiKey) {
+  if (!resolvedNotionApiKey) {
     return {
       published: false,
-      reason: "NOTION_API_KEY is not configured.",
+      reason: "No Notion token is available. Connect Notion or configure NOTION_API_KEY.",
     };
   }
 
@@ -57,7 +58,7 @@ export async function createNotionPage({ markdown, parentPageId, title }: Publis
   const response = await fetch("https://api.notion.com/v1/pages", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${notionApiKey}`,
+      Authorization: `Bearer ${resolvedNotionApiKey}`,
       "Content-Type": "application/json",
       "Notion-Version": NOTION_API_VERSION,
     },

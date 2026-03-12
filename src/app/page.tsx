@@ -1,15 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   BrainCircuit,
   Database,
+  DoorOpen,
   FileImage,
   FileText,
   Flame,
+  Link2,
   Loader2,
   Orbit,
   Send,
@@ -25,8 +27,18 @@ type ApiResult = {
   publishReason?: string | null;
   notionPageUrl?: string | null;
   notionPageCreatedId?: string | null;
+  notionConnected?: boolean;
+  notionWorkspaceName?: string | null;
   mcpNote?: string;
   error?: string;
+};
+
+type NotionSessionState = {
+  connected: boolean;
+  workspaceName?: string | null;
+  workspaceId?: string | null;
+  workspaceIcon?: string | null;
+  ownerName?: string | null;
 };
 
 const workflowOptions: Array<{
@@ -64,7 +76,30 @@ export default function Home() {
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ApiResult | null>(null);
+  const [notionSession, setNotionSession] = useState<NotionSessionState>({ connected: false });
+  const [notionBanner, setNotionBanner] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("notion_connected");
+    const error = params.get("notion_error");
+
+    if (connected) {
+      setNotionBanner("Notion connected successfully.");
+      window.history.replaceState({}, "", "/");
+    }
+
+    if (error) {
+      setNotionBanner(`Notion connection failed: ${error}`);
+      window.history.replaceState({}, "", "/");
+    }
+
+    void fetch("/api/notion/session")
+      .then((sessionResponse) => sessionResponse.json())
+      .then((data: NotionSessionState) => setNotionSession(data))
+      .catch(() => setNotionSession({ connected: false }));
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -106,6 +141,12 @@ export default function Home() {
     }
   };
 
+  const handleDisconnectNotion = async () => {
+    await fetch("/api/notion/disconnect", { method: "POST" });
+    setNotionSession({ connected: false });
+    setNotionBanner("Notion disconnected.");
+  };
+
   return (
     <div className="grain min-h-screen overflow-x-hidden">
       <header className="sticky top-0 z-50 border-b border-white/8 bg-[#07111bcc] backdrop-blur-xl">
@@ -139,6 +180,11 @@ export default function Home() {
               <Orbit className="h-3.5 w-3.5" />
               Built for the Notion MCP Challenge
             </div>
+            {notionBanner && (
+              <div className="rounded-2xl border border-[#7ce7ff33] bg-[#7ce7ff12] px-4 py-3 text-sm text-[#a7ecfa]">
+                {notionBanner}
+              </div>
+            )}
             <div className="space-y-4">
               <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-[#f8f1e8] md:text-7xl">
                 Turn rough visuals into polished Notion deliverables.
@@ -162,6 +208,36 @@ export default function Home() {
                 <Flame className="mb-3 h-5 w-5 text-[#ffe27a]" />
                 <p className="text-sm font-medium">Challenge-ready flow</p>
                 <p className="mt-1 text-sm leading-6 text-[#9fb2c4]">Clear screenshots, concrete workflow, and direct Notion value.</p>
+              </div>
+            </div>
+            <div className="panel flex flex-col gap-4 rounded-3xl p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#f5efe6]">Notion connection</p>
+                <p className="mt-1 text-sm leading-6 text-[#9fb2c4]">
+                  {notionSession.connected
+                    ? `Connected to ${notionSession.workspaceName ?? "your Notion workspace"}.`
+                    : "Connect your Notion account to publish without storing a workspace-wide token in the app."}
+                </p>
+              </div>
+              <div className="flex gap-3">
+                {!notionSession.connected ? (
+                  <a
+                    href="/api/notion/connect"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#7ce7ff33] bg-[#7ce7ff12] px-4 py-3 text-sm font-medium text-[#a7ecfa] transition hover:bg-[#7ce7ff20]"
+                  >
+                    <Link2 className="h-4 w-4" />
+                    Connect Notion
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectNotion}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-[#f5efe6] transition hover:border-white/20"
+                  >
+                    <DoorOpen className="h-4 w-4" />
+                    Disconnect
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -278,7 +354,9 @@ export default function Home() {
                 Generate artifact
               </button>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-[#9db1c4]">
-                Add a Notion page ID to publish automatically. Leave it blank to use NexusForge as a multimodal drafting console.
+                {notionSession.connected
+                  ? "Notion is connected. Add a parent page ID to publish directly into your workspace."
+                  : "Add a Notion page ID to publish automatically. Leave it blank to use NexusForge as a multimodal drafting console."}
               </div>
             </div>
           </form>
