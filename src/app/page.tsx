@@ -64,6 +64,7 @@ type HealthState = {
 
 const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const RECENT_PAGES_STORAGE_KEY = "nexusforge_recent_pages";
 
 const workflowOptions: Array<{
   value: WorkflowMode;
@@ -109,6 +110,7 @@ export default function Home() {
   const [searchingPages, setSearchingPages] = useState(false);
   const [pageSearchError, setPageSearchError] = useState<string | null>(null);
   const [selectedPageTitle, setSelectedPageTitle] = useState<string | null>(null);
+  const [recentPages, setRecentPages] = useState<NotionPageOption[]>([]);
   const [health, setHealth] = useState<HealthState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,7 +138,32 @@ export default function Home() {
       .then((healthResponse) => healthResponse.json())
       .then((data: HealthState) => setHealth(data))
       .catch(() => setHealth(null));
+
+    try {
+      const stored = window.localStorage.getItem(RECENT_PAGES_STORAGE_KEY);
+
+      if (stored) {
+        setRecentPages(JSON.parse(stored) as NotionPageOption[]);
+      }
+    } catch {
+      setRecentPages([]);
+    }
   }, []);
+
+  const persistRecentPages = (pages: NotionPageOption[]) => {
+    setRecentPages(pages);
+
+    try {
+      window.localStorage.setItem(RECENT_PAGES_STORAGE_KEY, JSON.stringify(pages));
+    } catch {
+      // Ignore localStorage failures and keep the in-memory list only.
+    }
+  };
+
+  const rememberPage = (page: NotionPageOption) => {
+    const nextPages = [page, ...recentPages.filter((item) => item.id !== page.id)].slice(0, 5);
+    persistRecentPages(nextPages);
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -244,6 +271,7 @@ export default function Home() {
     setNotionPageId(page.id);
     setSelectedPageTitle(page.title);
     setPageSearchError(null);
+    rememberPage(page);
   };
 
   const healthItems = health ? [
@@ -478,6 +506,36 @@ export default function Home() {
                       </div>
                       <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#8ea3b8]">
                         {page.parentType ?? "page"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {recentPages.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9eb4c8]">
+                  Recent pages
+                </label>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {recentPages.map((page) => (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onClick={() => handleSelectPage(page)}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                        notionPageId === page.id
+                          ? "border-[#7ce7ff66] bg-[#7ce7ff12]"
+                          : "border-white/10 bg-black/20 hover:border-white/20"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 text-sm font-medium text-[#f5efe6]">
+                        <Database className="h-4 w-4 text-[#ff8a3d]" />
+                        {page.title}
+                      </div>
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.18em] text-[#8ea3b8]">
+                        {page.id.slice(0, 8)}...
                       </p>
                     </button>
                   ))}
