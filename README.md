@@ -26,8 +26,8 @@ The project also includes workspace-level Notion MCP configuration in [.vscode/m
 - It is screenshot-ready for challenge submission and portfolio use.
 
 ## Screenshots
-### Landing state
-![NexusForge home](./docs/screenshots/nexusforge-home.png)
+### Live app with Notion OAuth connect flow
+![NexusForge OAuth home](./docs/screenshots/nexusforge-oauth-home.png)
 
 ### Generated technical brief from an uploaded system diagram
 ![NexusForge generated result](./docs/screenshots/nexusforge-generated.png)

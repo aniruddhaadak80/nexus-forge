@@ -22,8 +22,8 @@ It combines:
 *(Placeholder for Video URL showing image upload and Notion auto-population)*
 
 ## Screenshots
-### Landing page
-![NexusForge home](./screenshots/nexusforge-home.png)
+### Live app with in-product Notion connect flow
+![NexusForge OAuth home](./screenshots/nexusforge-oauth-home.png)
 
 ### Generated result from an uploaded system map
 ![NexusForge generated result](./screenshots/nexusforge-generated.png)
@@ -107,6 +107,7 @@ That means the project demonstrates two complementary ideas:
 ## Why This Stands Out In The Challenge
 - It is not just “chat with Notion”. It is a concrete production-style workflow.
 - It shows off **multimodality** in a way judges can understand immediately.
+- It includes a real in-product **Connect Notion** OAuth handoff instead of relying only on hidden developer credentials.
 - It uses Notion in a way that feels native: generating polished artifacts and pushing them directly into a workspace.
 - It is practical across engineering, operations, marketing, and study workflows.
 
