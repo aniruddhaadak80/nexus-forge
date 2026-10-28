@@ -120,6 +120,10 @@ export default function Home() {
     const error = params.get("notion_error");
 
     if (connected) {
+      // A post-OAuth flash message lives only in the URL and only on the
+      // client, so it cannot be derived during render without risking a
+      // hydration mismatch.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotionBanner("Notion connected successfully.");
       window.history.replaceState({}, "", "/");
     }
